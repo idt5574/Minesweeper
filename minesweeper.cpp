@@ -67,8 +67,16 @@ public:
 };
 
 int main() {
-    GameField field(5, 5);
+    int height, width;
+    cout << "Input height and width values: ";
+    cin >> height >> width;
+
+    system("cls");
+
+    GameField field(height, width);
     field.show_field();
+
+    system("pause");
 
     return 0;
 }
