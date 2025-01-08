@@ -27,10 +27,21 @@ enum cellType {
     opened = 3,
 };
 
+enum returnCodes {
+    errCellDoentExits,
+    warnCellAlrdOpened,
+    warnCellFlagged,
+    endLose,
+    goodWin,
+    endGame,
+    continueGame
+};
+
 struct Cell {
 private:
     char outputSymbol;
     bool flag;
+    short countNearbyMines;
     cellType type;
     vector<shared_ptr<Cell>> nearbyCells;
 
@@ -42,6 +53,7 @@ public:
         flag = false;
         this->outputSymbol = outputSymbol;
         this->type = type;
+        countNearbyMines = 0;
         nearbyCells.resize(countOfNearbyCells, nullptr);
     }
 
@@ -64,7 +76,10 @@ public:
             break;
         
         case opened:
-            outputSymbol = ' ';
+
+            if(countNearbyMines == 0)
+                outputSymbol = ' ';
+            else outputSymbol = 48 + countNearbyMines;
             break;
         
         default:
@@ -78,6 +93,14 @@ public:
 
     void setNearbyCell(int index, shared_ptr<Cell> pCell) {
         nearbyCells[index] = pCell;
+    }
+
+    void increaseNearbyMines(int x=1) {
+        countNearbyMines += x;
+    }
+
+    void decreaseNearbyMines(int x=1) {
+        countNearbyMines -= x;
     }   
 
     void setFlag() {
@@ -102,6 +125,10 @@ public:
         return nearbyCells.size();
     }
 
+    short getCountOfNearbyMines() {
+        return countNearbyMines;
+    }
+
     shared_ptr<Cell> getNearbyCell(int x) {
         return nearbyCells[x];
     }
@@ -112,28 +139,15 @@ public:
 
     // Another functions
 
-    int countNearbyMines() {
-        int nearbyMinesCounter = 0;
-
-        for(int i = 0; i < nearbyCells.size(); i++) {
-            if(nearbyCells[i].get()->getCellType() == mineFeatured)
-                nearbyMinesCounter++;
-        }
-
-        return nearbyMinesCounter;
-    }
-
     void openCell(int& closedCells) {
 
         type = opened;
         closedCells--;
 
-        if(countNearbyMines() != 0) {
-            outputSymbol = 48 + countNearbyMines();
-            return;
-        }
+        setDefaultOutputSymbol();
 
-        outputSymbol = ' ';
+        if(countNearbyMines != 0) 
+            return;
 
         for(int i = 0; i < nearbyCells.size(); i++) {
             if(nearbyCells[i].get()->getCellType() == dflt && !nearbyCells[i].get()->getFlagStatus())
@@ -163,15 +177,23 @@ private:
                 field[y][x].get()->setCellType(mineFeatured);
                 field[y][x].get()->setOutputSymbol('M');
                 count++;
+
+                for(int a = -1; a <= 1; a++) {
+                    for(int b = -1; b <= 1; b++) {
+                        if(a == 0 && b == 0) continue;
+
+                        field[y + a][x + b].get()->increaseNearbyMines();
+                    }
+                }
             }
         }
     }
 
-    void validateSize(short& h, short& w) {
-        if (h < 1 || w < 1) {
-            cout << "WARNING! Minimal game field size - 1x1" << endl;
-            h = 1;
-            w = 1;
+    void validateSize(short& h, short& w, int& c) {
+        if (h < 9 || w < 9) {
+            cout << "WARNING! Minimal game field size - 9x9" << endl;
+            h = 9;
+            w = 9;
         } else if(h > 26 || w > 26)
         {
             cout << "WARNING! Maximal game field size - 26x26" << endl;
@@ -179,7 +201,15 @@ private:
             w = 26;
         }
 
-        closedCells = (h * w) - countOfMines;
+        if(c < 10) {
+            cout << "WARNING! Minimal amount of mines - 10" << endl;
+            c = 10;
+        } else if(((double)c / ((double)h * (double)w)) * 100.0 > 30.0) {
+            cout << "WARNING! Mines can occupy no more than 30%% of the map.\n";
+            c = (int)((h * w) * 0.3);
+        }
+
+        closedCells = (h * w) - c;
     }
 
     void initializeField() {
@@ -249,13 +279,14 @@ public:
         return closedCells;
     }
 
-    void CreateField(short h = 1, short w = 1, int countOfMines = 1) {
+    void CreateField(short h = 9, short w = 9, int countOfMines = 10) {
+        validateSize(h, w, countOfMines);
         this->countOfMines = countOfMines;
-        validateSize(h, w);
         height = h + 2;
         width = w + 2;
         initializeField();
         cout << "New field generated. Size of field: " << h << 'x' << w << endl;
+        cout << "Amount of mines - " << countOfMines << endl;
     }
 
     void show_field(bool showMines=false) const {
@@ -275,48 +306,36 @@ public:
             for (int j = 0; j < width; j++) {
                 if(field[i][j].get()->getCellType() != mineFeatured)
                     cout << field[i][j].get()->getOutputSymbol();
-                else if(showMines) cout << field[i][j].get()->getOutputSymbol();
+                else if(showMines || field[i][j].get()->getFlagStatus()) cout << field[i][j].get()->getOutputSymbol();
                 else cout << '#';
             }
             cout << endl;
         }
     }
 
-    bool openCell(int x, int y) {
+    returnCodes openCell(int x, int y) {
         system("cls");
         if(x < 1 || x > width - 2 || y < 1 || y > height - 2)
-        {
-            cout << "ERROR! Cell " << alph[x - 1] << y << " is doesnt exist!" << endl;
-            return false;
-        }
+            return errCellDoentExits;
+        
+        if(field[y][x].get()->getFlagStatus())    
+            return warnCellFlagged;
 
-        if(field[y][x].get()->getCellType() == mineFeatured) {
-            cout << "You lose!" << endl;
-            return true;
-        }
-
+        if(field[y][x].get()->getCellType() == mineFeatured) 
+            return endLose;
+        
         if(field[y][x].get()->getCellType() == opened)
-        {
-            cout << "Cell " << alph[x - 1] << y << " is already opened!" << endl;
-            return false;
-        }
-
-        if(field[y][x].get()->getFlagStatus()) {
-            cout << "Cell " << alph[x - 1] << y << " is flagged!" << endl;
-        }
+            return warnCellAlrdOpened;
 
         field[y][x].get()->setCellType(opened);
         closedCells--;
 
-        int curNearbyMinesCount = field[y][x].get()->countNearbyMines();
+        int curNearbyMinesCount = field[y][x].get()->getCountOfNearbyMines();
+        field[y][x].get()->setDefaultOutputSymbol();
 
         if(curNearbyMinesCount != 0)
-        {
-            field[y][x].get()->setOutputSymbol(curNearbyMinesCount + 48);
-            return false;
-        }
-        
-        field[y][x].get()->setOutputSymbol(' ');
+            return continueGame;
+
 
         for(int i = 0; i < field[y][x].get()->getCountOfNearbyCells(); i++) {
             shared_ptr<Cell> tempCellPTR {field[y][x].get()->getNearbyCell(i)};
@@ -328,28 +347,32 @@ public:
             tempCellPTR.reset();
         }
 
-        return false;
+        return continueGame;
     }
 
-    bool flagCell(int x, int y) {
+    returnCodes flagCell(int x, int y) {
         system("cls");
+
+        if(field[y][x].get()->getCellType() == opened)
+            return warnCellAlrdOpened;
+
         if(field[y][x].get()->getFlagStatus())
-            return false;
-        
+            return warnCellFlagged;
 
         field[y][x].get()->setFlag();
         field[y][x].get()->setOutputSymbol('F');
-        return true;
+        return continueGame;
     }
 
-    bool unflagCell(int x, int y) {
+    returnCodes unflagCell(int x, int y) {
         system("cls");
+
         if(!field[y][x].get()->getFlagStatus())
-            return false;
+            return warnCellFlagged;
         
         field[y][x].get()->unflag();
         field[y][x].get()->setDefaultOutputSymbol();
-        return true;
+        return continueGame;
     }
 };
 
@@ -370,25 +393,49 @@ public:
         gameField.show_field();
     }
 
-    bool readCommand() {
+    returnCodes readCommand() {
         cout << "> ";
 
         string command;
         cin >> command;
 
         if(command == "open") {
-            bool rValue;
+            returnCodes rValue = continueGame;
+            returnCodes gValue;
             char symbol;
             int number;
 
             cin >> symbol >> number;
 
-            rValue = gameField.openCell(symbol - 96, number);
+            gValue = gameField.openCell(symbol - 96, number);
             gameField.show_field();
+
+            switch (gValue)
+            {
+            case errCellDoentExits:
+                cout << "ERROR! Cell " << symbol << number << " is doesnt exist!" << endl;
+                break;
+            
+            case endLose:
+                cout << "You lose!" << endl;
+                rValue = endGame;
+                break;
+
+            case warnCellAlrdOpened:
+                cout << "Cell " << symbol << number << " is already opened!" << endl;
+                break; 
+
+            case warnCellFlagged:
+                cout << "Cell " << symbol << number << " is flagged!" << endl;
+                break;
+            
+            default:
+                break;
+            }
 
             if(gameField.getClosedCells() == 0) {
                 cout << "You won!" << endl;
-                rValue = true;
+                rValue = endGame;
             }
 
             return rValue;
@@ -397,35 +444,58 @@ public:
         if(command == "flag") {
             char symbol;
             int number;
-            bool rValue;
+            returnCodes rValue = continueGame;
+            returnCodes gValue;
 
             cin >> symbol >> number;
-            rValue = gameField.flagCell(symbol - 96, number);
+            gValue = gameField.flagCell(symbol - 96, number);
             gameField.show_field();
 
-            if(rValue)
-                cout << "Cell " << symbol << number << " is flagged!" << endl;
-            else 
+            switch (gValue)
+            {
+            case warnCellFlagged:
                 cout << "Cell " << symbol << number << " is already flagged!" << endl;
+                break;
+            
+            case continueGame:
+                cout << "Cell " << symbol << number << " is flagged!" << endl;
+                break;
 
-            return false;
+            case warnCellAlrdOpened:
+                cout << "Cell " << symbol << number << " is already opened!" << endl;
+
+            default:
+                break;
+            }
+
+            return rValue;
         }
 
         if(command == "unflag") {
             char symbol;
             int number;
-            bool rValue;
+            returnCodes rValue = continueGame;
+            returnCodes gValue;
 
             cin >> symbol >> number;
-            rValue = gameField.unflagCell(symbol - 96, number);
+            gValue = gameField.unflagCell(symbol - 96, number);
             gameField.show_field();
 
-            if(rValue)
-                cout << "Cell " << symbol << number << " is unflagged!" << endl;
-            else 
+            switch (gValue)
+            {
+            case warnCellFlagged:
                 cout << "Cell " << symbol << number << " is already unflagged!" << endl;
+                break;
+            
+            case continueGame:
+                cout << "Cell " << symbol << number << " is unflagged!" << endl;
+                break;
 
-            return false;
+            default:
+                break;
+            }   
+
+            return rValue;
         }
 
         if(command == "help") {
@@ -433,16 +503,16 @@ public:
             gameField.show_field();
 
             printf("COMMANDS: \n help - output this menu\n open xy - open cell with xy coordinated\n           (x - horizontal, y - vertical)\n flag xy - flag cell\n unflag xy - unflag cell\n close - close game\n");
-            return false;
+            return continueGame;
         }
 
         if(command == "close") {
-            return true;
+            return endGame;
         }
 
         clearInput();
         cout << "Unknown command!" << endl;
-        return false;
+        return continueGame;
     }
 };
 
@@ -452,8 +522,8 @@ int main() {
 
     while (1)
     {
-        bool x = g.readCommand();
-        if(x) break;
+        returnCodes x = g.readCommand();
+        if(x == endGame) break;
     }
 
     system("pause");
