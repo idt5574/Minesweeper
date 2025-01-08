@@ -1,6 +1,11 @@
 # C++ pet-project to train my programming skills
 
-## 08.01.2025 update
+## (2) 08.01.2025 update
+### Code update
+    - Fixed some bugs
+    - Now code is most handy for next updates
+
+## (1) 08.01.2025 update
 ### Added working gameplay!
 Now you can play in minesweeper! 
 ## Steps after launching the game:
