@@ -1,5 +1,27 @@
 # C++ pet-project to train my programming skills
 
+## 18.01.2025 update
+### Gameplay update!
+Added main menu and save feature!
+#### Main menu
+Here you will start the game
+##### In-main menu commands:
+        - newgame: starts new game
+        - loadlast: loads last game
+        - dellast: deletes last game
+        - loadsave: loads player save
+        - delsave: deletes playes save
+        - close: closes game
+
+#### Auto-save
+Your every in-game action will be saved!
+After you leave the game, you can load it with "loadlast" command!
+
+#### Player-save
+##### New in-game command
+        - save: saves your curent game state
+After you leave the game, you can load it with "loadsave" command!
+
 ## (2) 08.01.2025 update
 ### Code update
     - Fixed some bugs
