@@ -4,6 +4,7 @@
 #include <string>
 #include <ctime>
 #include <limits>
+#include <fstream>
 
 using std::cin;
 using std::cout;
@@ -14,6 +15,8 @@ using std::string;
 using std::make_shared;
 
 const string alph = "abcdefghijklmnopqrstuvwxyz";
+bool saveLastGame = false;
+bool savePlayerGame = false;
 
 void clearInput() {
     std::cin.clear(); // Сбрасываем флаги ошибок
@@ -34,7 +37,16 @@ enum returnCodes {
     endLose,
     goodWin,
     endGame,
-    continueGame
+    continueGame,
+    retToMenu,
+    successSave,
+    successLoad,
+    saveErrFile,
+    unknownCommand,
+    lastSaveDoesNotExist,
+    playerSaveDoesNotExist,
+    lastSaveDeleted,
+    playerSaveDeleted
 };
 
 struct Cell {
@@ -42,8 +54,8 @@ private:
     char outputSymbol;
     bool flag;
     short countNearbyMines;
+    short countOfNearbyCells;
     cellType type;
-    vector<shared_ptr<Cell>> nearbyCells;
 
 public:
 
@@ -53,8 +65,8 @@ public:
         flag = false;
         this->outputSymbol = outputSymbol;
         this->type = type;
+        this->countOfNearbyCells = countOfNearbyCells;
         countNearbyMines = 0;
-        nearbyCells.resize(countOfNearbyCells, nullptr);
     }
 
     // Setters area
@@ -91,10 +103,6 @@ public:
         this->type = type;
     }
 
-    void setNearbyCell(int index, shared_ptr<Cell> pCell) {
-        nearbyCells[index] = pCell;
-    }
-
     void increaseNearbyMines(int x=1) {
         countNearbyMines += x;
     }
@@ -122,38 +130,18 @@ public:
     }
 
     int getCountOfNearbyCells() {
-        return nearbyCells.size();
+        return countOfNearbyCells;
     }
 
     short getCountOfNearbyMines() {
         return countNearbyMines;
     }
 
-    shared_ptr<Cell> getNearbyCell(int x) {
-        return nearbyCells[x];
-    }
-
     bool getFlagStatus() {
         return flag;
     }
 
-    // Another functions
-
-    void openCell(int& closedCells) {
-
-        type = opened;
-        closedCells--;
-
-        setDefaultOutputSymbol();
-
-        if(countNearbyMines != 0) 
-            return;
-
-        for(int i = 0; i < nearbyCells.size(); i++) {
-            if(nearbyCells[i].get()->getCellType() == dflt && !nearbyCells[i].get()->getFlagStatus())
-                nearbyCells[i].get()->openCell(closedCells);
-        }
-    }
+    // Pointer getters area
 };
 
 struct GameField {
@@ -161,7 +149,7 @@ private:
     short height, width;
     int countOfMines;
     int closedCells;
-    vector<vector<shared_ptr<Cell>>> field;
+    vector<vector<Cell>> field;
 
     void generateMines() {
         int count = 0;
@@ -172,17 +160,17 @@ private:
             int x = rand() % ((width - 2) - 1 + 1) + 1,
                 y = rand() % ((height - 2) - 1 + 1) + 1;
             
-            if(field[y][x].get()->getCellType() != mineFeatured)
+            if(field[y][x].getCellType() != mineFeatured)
             {
-                field[y][x].get()->setCellType(mineFeatured);
-                field[y][x].get()->setOutputSymbol('M');
+                field[y][x].setCellType(mineFeatured);
+                field[y][x].setOutputSymbol('M');
                 count++;
 
                 for(int a = -1; a <= 1; a++) {
                     for(int b = -1; b <= 1; b++) {
                         if(a == 0 && b == 0) continue;
 
-                        field[y + a][x + b].get()->increaseNearbyMines();
+                        field[y + a][x + b].increaseNearbyMines();
                     }
                 }
             }
@@ -210,45 +198,6 @@ private:
         }
 
         closedCells = (h * w) - c;
-    }
-
-    void initializeField() {
-        field.resize(height, vector<shared_ptr<Cell>>(width));
-
-        // Initializing main cell parameters
-        for (int i = 0; i < height; i++) {
-            for (int j = 0; j < width; j++) {
-                if (i == 0 || i == height - 1) {
-                    field[i][j] = make_shared<Cell>((j == 0 || j == width - 1) ? '+', 3, decorative : '-', 5, decorative);
-                }  
-                else if (j == 0 || j == width - 1) field[i][j] = make_shared<Cell>('|', 5, decorative); // '|';
-                else field[i][j] = make_shared<Cell>('#');
-            }
-        }
-
-        // Initializing nearby cells
-        for (int i = 0; i < height; i++) {
-            for (int j = 0; j < width; j++) {
-
-                int count = 0;
-
-                for(int a = -1; a <= 1; a++) {
-                    for(int b = -1; b <= 1; b++) {
-                        if(a == 0 && b == 0) continue;
-                        int n = i + a,
-                            k = j + b;
-                        
-                        if(n > -1 && n < height && k > -1 && k < width)
-                        {
-                            field[i][j].get()->setNearbyCell(count, field[n][k]);
-                            count++;
-                        }
-                    }
-                } 
-            } 
-        }
-
-        generateMines();
     }
 
 public:
@@ -279,6 +228,30 @@ public:
         return closedCells;
     }
 
+    // Pointer getters area
+
+    short* pgetHeight() {
+        return &height;
+    }
+
+    short* pgetWidth() {
+        return &width;
+    }
+
+    int* pgetCountOfMines() {
+        return &countOfMines;
+    }
+
+    int* pgetClosedCells() {
+        return &closedCells;
+    }
+
+    Cell* pgetCell(int i, int j) {
+        return &field[i][j];
+    }
+
+    // Other functions
+
     void CreateField(short h = 9, short w = 9, int countOfMines = 10) {
         validateSize(h, w, countOfMines);
         this->countOfMines = countOfMines;
@@ -289,7 +262,7 @@ public:
         cout << "Amount of mines - " << countOfMines << endl;
     }
 
-    void show_field(bool showMines=false) const {
+    void show_field(bool showMines=false) {
         cout << "   ";
         for (int j = 1; j < width - 1; j++) {
             cout << (j - 1 < alph.size() ? alph[j - 1] : ' ');
@@ -304,47 +277,49 @@ public:
             }
 
             for (int j = 0; j < width; j++) {
-                if(field[i][j].get()->getCellType() != mineFeatured)
-                    cout << field[i][j].get()->getOutputSymbol();
-                else if(showMines || field[i][j].get()->getFlagStatus()) cout << field[i][j].get()->getOutputSymbol();
+                if(field[i][j].getCellType() != mineFeatured)
+                    cout << field[i][j].getOutputSymbol();
+                else if(showMines || field[i][j].getFlagStatus()) cout << field[i][j].getOutputSymbol();
                 else cout << '#';
             }
             cout << endl;
         }
     }
 
-    returnCodes openCell(int x, int y) {
-        system("cls");
-        if(x < 1 || x > width - 2 || y < 1 || y > height - 2)
-            return errCellDoentExits;
-        
-        if(field[y][x].get()->getFlagStatus())    
-            return warnCellFlagged;
+    returnCodes openCell(int x, int y, bool rec=false) {        
+        if(!rec) {
+            if(x < 1 || x > width - 2 || y < 1 || y > height - 2)
+                return errCellDoentExits;
+            
+            if(field[y][x].getFlagStatus())    
+                return warnCellFlagged;
 
-        if(field[y][x].get()->getCellType() == mineFeatured) 
-            return endLose;
-        
-        if(field[y][x].get()->getCellType() == opened)
-            return warnCellAlrdOpened;
+            if(field[y][x].getCellType() == mineFeatured) 
+                return endLose;
+            
+            if(field[y][x].getCellType() == opened)
+                return warnCellAlrdOpened;
+        }
 
-        field[y][x].get()->setCellType(opened);
+        field[y][x].setCellType(opened);
         closedCells--;
 
-        int curNearbyMinesCount = field[y][x].get()->getCountOfNearbyMines();
-        field[y][x].get()->setDefaultOutputSymbol();
+        field[y][x].setDefaultOutputSymbol();
 
-        if(curNearbyMinesCount != 0)
+        if(field[y][x].getCountOfNearbyMines() != 0)
             return continueGame;
 
+        for(int a = -1; a <= 1; a++) {
+            for(int b = -1; b <= 1; b++) {
+                if(a == 0 && b == 0) continue;
+                int n = y + a,
+                    k = x + b;
+                
+                if(n < 1 || n > height - 2 || k < 1 || k > width - 2) continue;
 
-        for(int i = 0; i < field[y][x].get()->getCountOfNearbyCells(); i++) {
-            shared_ptr<Cell> tempCellPTR {field[y][x].get()->getNearbyCell(i)};
-            
-            if(tempCellPTR.get()->getCellType() == dflt && !tempCellPTR.get()->getFlagStatus()) {
-                tempCellPTR.get()->openCell(closedCells);
+                if(field[n][k].getCellType() == dflt && !field[n][k].getFlagStatus())
+                    openCell(k, n, true);
             }
-
-            tempCellPTR.reset();
         }
 
         return continueGame;
@@ -353,36 +328,57 @@ public:
     returnCodes flagCell(int x, int y) {
         system("cls");
 
-        if(field[y][x].get()->getCellType() == opened)
+        if(field[y][x].getCellType() == opened)
             return warnCellAlrdOpened;
 
-        if(field[y][x].get()->getFlagStatus())
+        if(field[y][x].getFlagStatus())
             return warnCellFlagged;
 
-        field[y][x].get()->setFlag();
-        field[y][x].get()->setOutputSymbol('F');
+        field[y][x].setFlag();
+        field[y][x].setOutputSymbol('F');
         return continueGame;
     }
 
     returnCodes unflagCell(int x, int y) {
         system("cls");
 
-        if(!field[y][x].get()->getFlagStatus())
+        if(!field[y][x].getFlagStatus())
             return warnCellFlagged;
         
-        field[y][x].get()->unflag();
-        field[y][x].get()->setDefaultOutputSymbol();
+        field[y][x].unflag();
+        field[y][x].setDefaultOutputSymbol();
         return continueGame;
+    }
+
+    void initializeField(bool isLoad=false) {
+        field.resize(height, vector<Cell>(width));
+
+        if(isLoad) return;
+
+        // Initializing main cell parameters
+        for (int i = 0; i < height; i++) {
+            for (int j = 0; j < width; j++) {
+                if (i == 0 || i == height - 1) {
+                    field[i][j] = (Cell){((j == 0 || j == width - 1) ? '+', 3, decorative : '-', 5, decorative)};
+                }  
+                else if (j == 0 || j == width - 1) field[i][j] = (Cell){'|', 5, decorative};
+                else field[i][j] = (Cell){'#'};
+            }
+        }
+
+        generateMines();
     }
 };
 
-struct game {
+struct Game {
 private:
     GameField gameField;
 
 public:
 
     void start() {
+        system("cls");
+
         short height, width, amountOfMines;
         cout << "Input height and width values: ";
         cin >> height >> width;
@@ -391,6 +387,73 @@ public:
 
         gameField.CreateField(height, width, amountOfMines);
         gameField.show_field();
+    }
+
+    returnCodes save(bool lastSave=false) {
+        system("cls");
+
+        std::ofstream ofs((lastSave ? "saveL.dat" : "saveP.dat"), std::ios::out | std::ios::binary);
+
+        if(!ofs.is_open()) { // Check the successful opening
+            cout << "ERROR: File " << (lastSave ? "\"saveL.dat\"" : "\"saveP.dat\"") << " wasn's opened for writing." << endl << "The program will be aborted!" << endl;
+            system("pause");
+            return saveErrFile;
+        }
+        
+        // Write game field parameters in the file
+        ofs.write((char*)gameField.pgetHeight(), sizeof(short));
+        ofs.write((char*)gameField.pgetWidth(), sizeof(short));
+        ofs.write((char*)gameField.pgetCountOfMines(), sizeof(int));
+        ofs.write((char*)gameField.pgetClosedCells(), sizeof(int));
+
+        // Write parameters of every cell in the file
+        for(int i = 0; i < gameField.getHeight(); i++) {
+            for(int j = 0; j < gameField.getWidth(); j++) {
+                ofs.write((char*)gameField.pgetCell(i, j), sizeof(Cell));
+            }
+        }   
+
+        ofs.close();
+
+        if(lastSave) {
+            saveLastGame = true;
+            return successSave;
+        }
+
+        gameField.show_field();
+        savePlayerGame = true;
+        cout << "Game was successfull saved!" << endl;
+
+        return successSave;
+    }
+
+    returnCodes load(bool lastSave=false) {
+        std::ifstream ifs((lastSave ? "saveL.dat" : "saveP.dat"), std::ios::in | std::ios::binary);
+
+        if(!ifs.is_open()) { // Check the successful opening
+            cout << "ERROR: File " << (lastSave ? "\"saveL.dat\"" : "\"saveP.dat\"") << " wasn's opened for reading." << endl;
+            system("pause");
+            return saveErrFile;
+        }
+
+        // Write game field parameters from the file
+        ifs.read((char*)gameField.pgetHeight(), sizeof(short));
+        ifs.read((char*)gameField.pgetWidth(), sizeof(short));
+        ifs.read((char*)gameField.pgetCountOfMines(), sizeof(int));
+        ifs.read((char*)gameField.pgetClosedCells(), sizeof(int));
+
+        gameField.initializeField(true);
+
+        for(int i = 0; i < gameField.getHeight(); i++) {
+            for(int j = 0; j < gameField.getWidth(); j++) {
+                ifs.read((char*)gameField.pgetCell(i, j), sizeof(Cell));
+            }
+        }
+
+        ifs.close();
+
+        gameField.show_field();
+        return successLoad;
     }
 
     returnCodes readCommand() {
@@ -408,6 +471,10 @@ public:
             cin >> symbol >> number;
 
             gValue = gameField.openCell(symbol - 96, number);
+
+            save(true);
+
+            system("cls");
             gameField.show_field();
 
             switch (gValue)
@@ -449,6 +516,9 @@ public:
 
             cin >> symbol >> number;
             gValue = gameField.flagCell(symbol - 96, number);
+
+            save(true);
+
             gameField.show_field();
 
             switch (gValue)
@@ -479,6 +549,9 @@ public:
 
             cin >> symbol >> number;
             gValue = gameField.unflagCell(symbol - 96, number);
+
+            save(true);
+
             gameField.show_field();
 
             switch (gValue)
@@ -498,11 +571,27 @@ public:
             return rValue;
         }
 
+        if(command == "save") {
+            returnCodes gValue = save();
+
+            switch (gValue)
+            {
+            case saveErrFile:
+                cout << "Game will be closed..." << endl;
+                return endGame;
+            
+            default:
+                break;
+            }
+
+            return continueGame;
+        }
+
         if(command == "help") {
             system("cls");
             gameField.show_field();
 
-            printf("COMMANDS: \n help - output this menu\n open xy - open cell with xy coordinated\n           (x - horizontal, y - vertical)\n flag xy - flag cell\n unflag xy - unflag cell\n close - close game\n");
+            printf("COMMANDS: \n help - output this menu\n open xy - open cell with xy coordinated\n           (x - horizontal, y - vertical)\n flag xy - flag cell\n unflag xy - unflag cell\n save - save game\n close - close game\n");
             return continueGame;
         }
 
@@ -516,17 +605,128 @@ public:
     }
 };
 
-int main() {
-    game g;
-    g.start();
+struct GameMenu {
+private:
+    Game game;
 
-    while (1)
-    {
-        returnCodes x = g.readCommand();
-        if(x == endGame) break;
+    void gameplay() {
+        while (1)
+        {
+            returnCodes x = game.readCommand();
+            if(x == endGame) break;
+        }
+
+        system("pause");
     }
 
-    system("pause");
+public:
+    void startMenu() {
+
+        while (true)
+        {
+            printf("==|MENU|==\n- newgame\n");
+
+            if(saveLastGame)
+                cout << "- loadlast" << endl << "- dellast" << endl;
+            
+            if(savePlayerGame) 
+                cout << "- loadsave" << endl << "- delsave" << endl;
+
+            cout << "- close" << endl;
+
+            returnCodes gValue = commandReaded();
+
+            switch (gValue)
+            {
+            case unknownCommand:
+                system("cls");
+                cout << "Unknown command!" << endl;
+                break;
+            
+            case endGame:
+                return;
+
+            default:
+                system("cls");
+                break;
+            }
+
+            if(gValue == endGame) break;
+        }
+        
+    }
+
+    returnCodes commandReaded() {
+        string command;
+
+        cout << "> ";
+        cin >> command;
+
+        if(command == "newgame") {
+            game.start();
+            gameplay();
+
+            return retToMenu;
+        }
+
+        if(command == "loadsave") {
+            if(!savePlayerGame)
+                return playerSaveDoesNotExist;
+
+            game.load();
+            gameplay();
+            
+            return retToMenu;
+        }
+
+        if(command == "loadlast") {
+            if(!saveLastGame)
+                return lastSaveDoesNotExist;
+
+            game.load(true);
+            gameplay();
+
+            return retToMenu;
+        }
+
+        if(command == "dellast") {
+            saveLastGame = false;
+            remove("saveL.dat");
+            return lastSaveDeleted;
+        }
+
+        if(command == "delsave") {
+            savePlayerGame = false;
+            remove("saveP.dat");
+            return playerSaveDeleted;
+        }
+
+        if(command == "close") {
+            return endGame;
+        }
+
+        return unknownCommand;
+    }
+
+};
+
+int main() {
+    std::ifstream ifs("savestatus.dat", std::ios::in | std::ios::binary);
+
+    if(ifs.is_open()) {
+        ifs.read((char*)&saveLastGame, sizeof(bool));
+        ifs.read((char*)&savePlayerGame, sizeof(bool));
+    }
+
+    ifs.close();
+
+    GameMenu gm;
+    gm.startMenu();
+
+    std::ofstream ofs("savestatus.dat", std::ios::out | std::ios::binary);
+    ofs.write((char*)&saveLastGame, sizeof(bool));
+    ofs.write((char*)&savePlayerGame, sizeof(bool));
+    ofs.close();
 
     return 0;
 }
