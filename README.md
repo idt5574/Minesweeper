@@ -1,5 +1,25 @@
 # C++ pet-project to train my programming skills
 
+## Before you open the game
+Put minesweeper.exe into a folder somewhere.
+Application will create save-files
+
+## Full command-list
+### In-menu commands
+        - newgame: starts new game
+        - loadlast: loads last game
+        - dellast: deletes last game
+        - loadsave: loads player save
+        - delsave: deletes playes save
+        - close: closes game
+### In-game commands
+        - help: output commands documentation
+        - open xy: opens cell with xy coordinates
+        - flag xy: flags cell with xy coordinates
+        - unflag xy: unflags cell with xy coordinates
+        - save: saves curent game state
+        - close: close the game
+
 ## 18.01.2025 update
 ### Gameplay update!
 Added main menu and save feature!
